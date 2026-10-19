@@ -1,0 +1,59 @@
+name: Build APK
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+      - name: Android SDK litsenziyalarini qabul qilish
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Eng yangi zip'ni ochish
+        run: |
+          newest=""
+          newest_t=0
+          for f in *.zip; do
+            t=$(git log -1 --format=%ct -- "$f")
+            if [ "$t" -gt "$newest_t" ]; then
+              newest_t=$t
+              newest="$f"
+            fi
+          done
+          if [ -z "$newest" ]; then
+            echo "Repozitoriyda .zip fayl topilmadi"
+            exit 1
+          fi
+          echo "Ishlatilmoqda: $newest"
+          mkdir proj
+          unzip -q "$newest" -d proj
+          settings=$(find proj -name settings.gradle.kts | head -1)
+          echo "PROJ=$(dirname "$settings")" >> "$GITHUB_ENV"
+      - name: Build
+        id: build
+        continue-on-error: true
+        working-directory: ${{ env.PROJ }}
+        run: gradle assembleDebug --console=plain > build.log 2>&1
+      - name: Xato xulosasi
+        if: steps.build.outcome == 'failure'
+        working-directory: ${{ env.PROJ }}
+        run: |
+          {
+            echo '## Build xatosi'
+            echo '```'
+            sed -n '/What went wrong/,/\* Try:/p' build.log | head -60 || true
+            grep -E '^e: |error:|AAPT' build.log | head -30 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GpsTracker-apk
+          path: ${{ env.PROJ }}/app/build/outputs/apk/debug/app-debug.apk
