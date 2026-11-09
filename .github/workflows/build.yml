@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Release APK
 
 on:
   push:
@@ -29,11 +29,12 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Build debug APK
+      - name: Build release APK (unsigned)
         working-directory: ${{ env.PROJECT_DIR }}
-        run: gradle assembleDebug --console=plain
+        run: gradle assembleRelease --console=plain --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
-          name: GpsTracker-debug-apk
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          name: GpsTracker-release-unsigned-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
